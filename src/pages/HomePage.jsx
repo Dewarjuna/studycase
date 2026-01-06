@@ -1,58 +1,88 @@
-import { useState, useEffect } from 'react';
-import { getProducts } from '../lib/api';
-import ProductCard from '../components/features/ProductCard.jsx';
+import { useProducts } from '../hooks/useProducts';
+import ProductGrid from '../components/features/ProductGrid';
+import FilterBar from '../components/features/FilterBar';
+import Pagination from '../components/features/Pagination';
+import LoadingGrid from '../components/ui/LoadingGrid';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
 
 export default function HomePage() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { 
+    products, 
+    total, 
+    loading, 
+    error, 
+    filters, 
+    actions, 
+    limit, 
+    isPaginated 
+  } = useProducts();
 
-  useEffect(() => {
-    getProducts()
-      .then(data => {
-        setProducts(data.products);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error(err);
-        setError('Failed to load products');
-        setLoading(false);
-      });
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-xl">Loading...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-xl text-red-600">{error}</div>
-      </div>
-    );
-  }
+  const displayCount = filters.searchQuery ? products.length : total;
 
   return (
-    <div className="container mx-auto px-6 py-6">
-      <div className="mb-4">
-        <h1 className="text-3xl font-bold text-gray-900">
-          All Products <span className="text-gray-500 font-normal text-lg">({products.length})</span>
-        </h1>
+    <main className="min-h-screen bg-gray-50">
+      {/* Filter Bar - Full Width */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="container mx-auto px-4 sm:px-6">
+          <FilterBar
+            filters={filters}
+            onCategoryChange={actions.setCategory}
+            onSortChange={actions.setSort}
+            onSearch={actions.setSearchQuery}
+            onClearSearch={actions.clearSearch}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {products.map((product, index) => (
-          <ProductCard 
-            key={product.id} 
-            product={product}
-            isNew={index % 3 === 0}
+      {/* Main Content */}
+      <div className="container mx-auto px-4 sm:px-6 py-8">
+        {/* Page Title */}
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            {filters.category ? formatCategoryName(filters.category) : 'All Products'}
+            <span className="text-gray-400 font-normal text-lg ml-2">
+              ({displayCount})
+            </span>
+          </h1>
+        </div>
+
+        {/* Products Section */}
+        <section aria-live="polite" aria-busy={loading}>
+          {loading ? (
+            <LoadingGrid count={limit} />
+          ) : error ? (
+            <ErrorState message={error} onRetry={actions.retry} />
+          ) : products.length === 0 ? (
+            <EmptyState 
+              message={filters.searchQuery 
+                ? `No results found for "${filters.searchQuery}"` 
+                : 'No products found.'
+              }
+              onClear={filters.searchQuery ? actions.clearSearch : undefined}
+            />
+          ) : (
+            <ProductGrid products={products} />
+          )}
+        </section>
+
+        {/* Pagination */}
+        {isPaginated && !loading && !error && products.length > 0 && (
+          <Pagination
+            currentPage={filters.page}
+            totalItems={total}
+            itemsPerPage={limit}
+            onPageChange={actions.setPage}
           />
-        ))}
+        )}
       </div>
-    </div>
+    </main>
   );
+}
+
+function formatCategoryName(category) {
+  return category
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
